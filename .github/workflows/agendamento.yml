@@ -1,0 +1,57 @@
+name: Buscador de TVs para Gaming
+
+on:
+  workflow_dispatch:
+  schedule:
+    # A cada 30 minutos. GitHub pode atrasar horários de cron sob carga.
+    - cron: "17,47 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: buscador-tv
+  cancel-in-progress: false
+
+jobs:
+  buscar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Configurar Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Instalar dependências
+        run: python -m pip install -r requirements.txt
+
+      - name: Rodar testes
+        run: python -m pytest -q
+
+      - name: Buscar promoções e enviar alertas
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python buscar_promocoes.py
+
+      - name: Persistir controle de duplicidade
+        run: |
+          if git diff --quiet -- state/sent_offers.json; then
+            echo "Nenhuma alteração no estado."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/sent_offers.json
+          git commit -m "chore: atualizar estado do buscador"
+          git push
