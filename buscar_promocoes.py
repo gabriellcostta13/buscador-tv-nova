@@ -391,7 +391,7 @@ def format_offer(offer: Offer) -> str:
 
 
 def send_telegram(message: str) -> None:
-    token = os.environ["TELEGRAM_TOKEN"]
+    token = os.environ["TOKEN_TELEGRAM"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
     endpoint = f"https://api.telegram.org/bot{token}/sendMessage"
 
