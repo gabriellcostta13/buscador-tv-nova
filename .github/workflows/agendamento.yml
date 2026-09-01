@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   schedule:
     # A cada 30 minutos. GitHub pode atrasar horários de cron sob carga.
-- cron: "0 */4 * * *"
+    - cron: "0 */4 * * *"
 
 permissions:
   contents: write
