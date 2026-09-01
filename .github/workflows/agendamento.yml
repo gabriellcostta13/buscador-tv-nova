@@ -38,7 +38,7 @@ jobs:
 
       - name: Buscar promoções e enviar alertas
         env:
-          API_KEY_GEMINI: ${{ secrets.API_KEY_GEMINI }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TOKEN_TELEGRAM: ${{ secrets.TOKEN_TELEGRAM }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python buscar_promocoes.py
