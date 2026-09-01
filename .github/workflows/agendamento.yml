@@ -112,4 +112,3 @@ jobs:
             -m "chore: atualizar estado do buscador"
 
           git push
-```
