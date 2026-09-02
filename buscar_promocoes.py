@@ -18,18 +18,18 @@ from pydantic import BaseModel, Field, field_validator
 # CONFIGURAÇÃO
 # ============================================================
 
-MAX_PRICE = 2000.00
+MAX_PRICE = 2300.00
 MIN_SIZE = 43.0
 MAX_SIZE = 50.0
 
 # Promoção comprovada:
-MIN_VERIFIED_DISCOUNT = 15.0
+MIN_VERIFIED_DISCOUNT = 12.0
 
 # Exceção:
 # preço muito agressivo + bom perfil gaming,
 # mesmo sem histórico de preço.
-EXCEPTIONAL_PRICE = 1600.00
-EXCEPTIONAL_GAMING_SCORE = 75
+EXCEPTIONAL_PRICE = 1800.00
+EXCEPTIONAL_GAMING_SCORE = 70
 
 # Só repetir alerta quando houver mudança relevante.
 MIN_PRICE_DROP_FOR_REPEAT = 5.0
@@ -64,6 +64,11 @@ TRUSTED_DOMAINS = {
     "pontofrio.com.br": "Ponto",
     "extra.com.br": "Extra",
     "leroymerlin.com.br": "Leroy Merlin",
+    "submarino.com.br": "Submarino",
+    "shoptime.com.br": "Shoptime",
+    "samsung.com": "Samsung (loja oficial)",
+    "lg.com": "LG (loja oficial)",
+    "shopee.com.br": "Shopee",
 }
 
 
@@ -74,29 +79,32 @@ TRUSTED_DOMAINS = {
 # Antes eram 6 pesquisas praticamente sobrepostas.
 # Agora fazemos UMA pesquisa ampla e deixamos o Gemini
 # encontrar tanto 43" quanto 50" e os recursos gaming.
-SEARCH_QUERY = """
-TV 4K 43 a 50 polegadas até R$ 2000 promoção gaming PS5 Brasil
+SEARCH_QUERY = f"""
+TV 4K 43 a 50 polegadas até R$ {MAX_PRICE:.0f} promoção gaming PS5 Brasil
 """
 
 
 # ============================================================
 # PROMPT
 # ============================================================
+# Construído como f-string para nunca ficar dessincronizado
+# dos valores reais de MAX_PRICE / EXCEPTIONAL_PRICE /
+# EXCEPTIONAL_GAMING_SCORE definidos acima.
 
-SYSTEM_PROMPT = r"""
+SYSTEM_PROMPT = f"""
 Você é um agente de compras extremamente criterioso.
 
 OBJETIVO:
 Encontrar promoções REAIS de TVs no Brasil para um comprador que usa PS5.
 O foco é obter a melhor qualidade de imagem e os melhores recursos para
-videogames dentro de R$ 2.000.
+videogames dentro de R$ {MAX_PRICE:.0f}.
 
 CRITÉRIOS OBRIGATÓRIOS:
 - TV nova.
 - Excluir usada, seminova, recondicionada, open box, outlet e peças.
-- Tela entre 43 e 50 polegadas, inclusive.
+- Tela entre {MIN_SIZE:g} e {MAX_SIZE:g} polegadas, inclusive.
 - Resolução 4K/UHD nativa.
-- Preço final máximo de R$ 2.000.
+- Preço final máximo de R$ {MAX_PRICE:.0f}.
 - Loja ou marketplace brasileiro confiável.
 - URL deve apontar para a página específica do produto/oferta.
 - Não aceitar categoria, artigo, lista ou página sem preço.
@@ -135,16 +143,17 @@ Se não houver histórico confiável:
 Só informe desconto quando houver referência confiável.
 
 Uma TV sem histórico ainda pode ser uma oportunidade excepcional se:
-- preço <= R$ 1.600
-- gaming_score >= 75
+- preço <= R$ {EXCEPTIONAL_PRICE:.0f}
+- gaming_score >= {EXCEPTIONAL_GAMING_SCORE}
 
 FONTES PRIORITÁRIAS:
 Mercado Livre, Amazon Brasil, Magazine Luiza, Casas Bahia, KaBuM,
-Americanas, Carrefour, Fast Shop, Ponto e Extra.
+Americanas, Carrefour, Fast Shop, Ponto, Extra, Submarino, Shoptime
+e Shopee.
 
 PESQUISA:
 Faça UMA pesquisa ampla.
-Encontre as melhores candidatas entre 43 e 50 polegadas.
+Encontre as melhores candidatas entre {MIN_SIZE:g} e {MAX_SIZE:g} polegadas.
 Depois verifique as melhores candidatas nas páginas diretas quando possível.
 
 Não desperdice pesquisas procurando separadamente cada tamanho ou recurso.
@@ -152,7 +161,7 @@ Não desperdice pesquisas procurando separadamente cada tamanho ou recurso.
 SAÍDA:
 Retorne somente JSON válido conforme o schema.
 
-Máximo de 6 ofertas.
+Máximo de {MAX_SEARCH_RESULTS} ofertas.
 Priorize qualidade da oportunidade.
 
 Nunca invente informação.
@@ -894,7 +903,7 @@ def send_telegram(
 ) -> None:
 
     token = os.environ[
-        "TOKEN_TELEGRAM"
+        "TELEGRAM_TOKEN"
     ]
 
     chat_id = os.environ[
