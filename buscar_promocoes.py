@@ -44,7 +44,7 @@ STATE_FILE = Path("state/sent_offers.json")
 
 REQUEST_TIMEOUT = 30
 
-MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 
 # ============================================================
