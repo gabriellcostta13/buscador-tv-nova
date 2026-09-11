@@ -43,7 +43,7 @@ STATE_FILE = Path("state/sent_offers.json")
 
 REQUEST_TIMEOUT = 30
 
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
 
 # ============================================================
