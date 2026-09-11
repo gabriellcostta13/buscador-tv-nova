@@ -10,7 +10,6 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
-from google import genai
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -37,14 +36,14 @@ MIN_PRICE_DROP_FOR_REPEAT = 5.0
 # Evita spam no Telegram.
 MAX_ALERTS_PER_RUN = 3
 
-# Limita a quantidade de ofertas que o Gemini precisa devolver.
+# Limita a quantidade de ofertas que a análise precisa devolver.
 MAX_SEARCH_RESULTS = 6
 
 STATE_FILE = Path("state/sent_offers.json")
 
 REQUEST_TIMEOUT = 30
 
-MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 
 # ============================================================
@@ -77,7 +76,7 @@ TRUSTED_DOMAINS = {
 # ============================================================
 
 # Antes eram 6 pesquisas praticamente sobrepostas.
-# Agora fazemos UMA pesquisa ampla e deixamos o Gemini
+# Agora fazemos UMA pesquisa ampla e deixamos a análise
 # encontrar tanto 43" quanto 50" e os recursos gaming.
 SEARCH_QUERY = f"""
 TV 4K 43 a 50 polegadas até R$ {MAX_PRICE:.0f} promoção gaming PS5 Brasil
@@ -496,7 +495,7 @@ def validate_offer(
     )
 
     # Cálculo LOCAL do desconto.
-    # Nunca confiamos no percentual fornecido pelo Gemini.
+    # Nunca confiamos no percentual fornecido pela análise.
     if (
         offer.reference_price_brl
         is not None
@@ -548,85 +547,120 @@ def validate_offer(
 
 
 # ============================================================
-# GEMINI
+# BUSCA (Tavily) + ANÁLISE (Groq)
 # ============================================================
 
-def search_web() -> list[Offer]:
-    api_key = os.environ["GEMINI_API_KEY"]
+TAVILY_ENDPOINT = "https://api.tavily.com/search"
+GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 
-    client = genai.Client(
-        api_key=api_key
-    )
 
-    prompt = (
-        SYSTEM_PROMPT
-        + "\n\nCONSULTA ÚNICA:\n"
-        + SEARCH_QUERY
-        + "\n\nEncontre e verifique somente as melhores "
-          "candidatas antes de responder."
-    )
+def tavily_search() -> list[dict]:
+    """Busca na web via Tavily, restrita às lojas confiáveis."""
+
+    api_key = os.environ["TAVILY_API_KEY"]
+
+    payload = {
+        "api_key": api_key,
+        "query": SEARCH_QUERY.strip(),
+        "search_depth": "advanced",
+        "max_results": 10,
+        "include_domains": list(TRUSTED_DOMAINS.keys()),
+    }
 
     try:
-        interaction = client.interactions.create(
-            model=MODEL,
-            input=prompt,
-            tools=[
-                {
-                    "type": "google_search",
-                },
-                {
-                    "type": "url_context",
-                },
-            ],
-            response_format={
-                "type": "text",
-                "mime_type": "application/json",
-                "schema": SearchResult.model_json_schema(),
-            },
+        response = requests.post(
+            TAVILY_ENDPOINT,
+            json=payload,
+            timeout=REQUEST_TIMEOUT,
         )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        print(f"Tavily falhou: {exc}")
+        return []
 
-    except Exception as exc:
-        message = str(exc).lower()
+    return response.json().get("results", [])
 
-        # NÃO repetir automaticamente em caso de quota.
-        # Retry de quota pode piorar o consumo.
-        if (
-            "429" in message
-            or "quota" in message
-            or "too_many_requests" in message
-            or "rate limit" in message
-        ):
-            print(
-                "Gemini sem quota disponível nesta execução. "
-                "Nenhuma nova tentativa será feita."
-            )
-            return []
 
-        raise
+def groq_analyze(results: list[dict]) -> list[Offer]:
+    """Usa o Groq (Llama 3.3 70B) para extrair e validar as ofertas
+    SOMENTE a partir do material que o Tavily já trouxe."""
 
-    output = getattr(
-        interaction,
-        "output_text",
-        None,
+    if not results:
+        return []
+
+    api_key = os.environ["GROQ_API_KEY"]
+
+    material = "\n\n".join(
+        f"URL: {item.get('url', '')}\n"
+        f"Título: {item.get('title', '')}\n"
+        f"Conteúdo: {item.get('content', '')[:2000]}"
+        for item in results
     )
 
-    if not output:
+    user_prompt = (
+        "RESULTADOS DE BUSCA (Tavily):\n\n"
+        + material
+        + "\n\nAnalise SOMENTE os resultados acima, sem inventar "
+          "nada que não esteja neles. Responda em JSON seguindo "
+          "exatamente este schema:\n"
+        + json.dumps(
+            SearchResult.model_json_schema(),
+            ensure_ascii=False,
+        )
+    )
+
+    payload = {
+        "model": GROQ_MODEL,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.2,
+    }
+
+    headers = {"Authorization": f"Bearer {api_key}"}
+
+    try:
+        response = requests.post(
+            GROQ_ENDPOINT,
+            json=payload,
+            headers=headers,
+            timeout=REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        print(f"Groq falhou: {exc}")
+        return []
+
+    if response.status_code == 429:
         print(
-            "Gemini não retornou conteúdo."
+            "Groq sem quota disponível nesta execução. "
+            "Nenhuma nova tentativa será feita."
         )
         return []
 
     try:
-        result = SearchResult.model_validate_json(
-            output
-        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        print(f"Groq retornou erro: {exc}")
+        return []
+
+    try:
+        content_json = response.json()["choices"][0]["message"]["content"]
+        result = SearchResult.model_validate_json(content_json)
     except Exception as exc:
-        print(
-            f"Resposta do Gemini não pôde ser validada: {exc}"
-        )
+        print(f"Resposta do Groq não pôde ser validada: {exc}")
         return []
 
     return result.offers
+
+
+def search_web() -> list[Offer]:
+    results = tavily_search()
+
+    print(f"Resultados retornados pelo Tavily: {len(results)}")
+
+    return groq_analyze(results)
 
 
 # ============================================================
@@ -853,48 +887,48 @@ def format_offer(
 
     if offer.evidence_urls:
         evidence = (
-            "\n🔎 Evidência: "
+            "\n?? Evidência: "
             + _tg(
                 offer.evidence_urls[0]
             )
         )
 
     return (
-        "🔥 <b>OFERTA DE TV PARA GAMING</b>\n\n"
+        "?? <b>OFERTA DE TV PARA GAMING</b>\n\n"
 
-        f"📺 <b>{_tg(offer.brand)} "
+        f"?? <b>{_tg(offer.brand)} "
         f"{_tg(offer.model)}</b>\n"
 
-        f"📏 {offer.size_inches:g}\" • "
+        f"?? {offer.size_inches:g}\" • "
         f"{_tg(offer.resolution)} • "
         f"{_tg(panel)}\n"
 
-        f"⚡ {_tg(refresh)}\n"
+        f"? {_tg(refresh)}\n"
 
-        f"🎮 {_tg(features)}\n\n"
+        f"?? {_tg(features)}\n\n"
 
-        f"💰 <b>Agora: "
+        f"?? <b>Agora: "
         f"{brl(offer.price_brl)}</b>\n"
 
-        f"📊 Referência: {ref}\n"
+        f"?? Referência: {ref}\n"
 
-        f"📉 Desconto real: "
+        f"?? Desconto real: "
         f"{discount}\n"
 
-        f"🏪 {_tg(offer.store)}\n"
+        f"?? {_tg(offer.store)}\n"
 
-        f"🎯 Gaming: "
+        f"?? Gaming: "
         f"{offer.gaming_score}/100\n"
 
-        f"🛡️ {_tg(confidence)}\n\n"
+        f"??? {_tg(confidence)}\n\n"
 
-        f"ℹ️ {_tg(offer.confidence_reason)}\n"
+        f"?? {_tg(offer.confidence_reason)}\n"
 
-        f"📝 {_tg(offer.notes)}"
+        f"?? {_tg(offer.notes)}"
 
         f"{evidence}\n"
 
-        f"\n🔗 {_tg(offer.url)}"
+        f"\n?? {_tg(offer.url)}"
     )
 
 
@@ -961,7 +995,7 @@ def main() -> None:
     )
 
     print(
-        f"Modelo Gemini: {MODEL}"
+        f"Modelo de análise: {GROQ_MODEL}"
     )
 
     state = load_state()
@@ -969,7 +1003,7 @@ def main() -> None:
     raw_offers = search_web()
 
     print(
-        f"Ofertas retornadas pelo Gemini: "
+        f"Ofertas após validação/análise: "
         f"{len(raw_offers)}"
     )
 
