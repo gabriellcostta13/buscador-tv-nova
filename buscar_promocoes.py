@@ -22,13 +22,13 @@ MIN_SIZE = 43.0
 MAX_SIZE = 50.0
 
 # Promoção comprovada:
-MIN_VERIFIED_DISCOUNT = 12.0
+MIN_VERIFIED_DISCOUNT = 8.0
 
 # Exceção:
 # preço muito agressivo + bom perfil gaming,
 # mesmo sem histórico de preço.
-EXCEPTIONAL_PRICE = 1800.00
-EXCEPTIONAL_GAMING_SCORE = 70
+EXCEPTIONAL_PRICE = 2000.00
+EXCEPTIONAL_GAMING_SCORE = 55
 
 # Só repetir alerta quando houver mudança relevante.
 MIN_PRICE_DROP_FOR_REPEAT = 5.0
@@ -69,6 +69,15 @@ TRUSTED_DOMAINS = {
     "lg.com": "LG (loja oficial)",
     "shopee.com.br": "Shopee",
 }
+
+# Domínios usados SÓ na busca (Tavily), além das lojas confiáveis acima.
+# Buscapé e Zoom nunca são aceitos como "loja" final (validate_offer só
+# aceita TRUSTED_DOMAINS) -- eles servem apenas para o Groq conseguir um
+# preço de referência real e validar o desconto comprovado.
+SEARCH_DOMAINS = list(TRUSTED_DOMAINS.keys()) + [
+    "buscape.com.br",
+    "zoom.com.br",
+]
 
 
 # ============================================================
@@ -564,7 +573,7 @@ def tavily_search() -> list[dict]:
         "query": SEARCH_QUERY.strip(),
         "search_depth": "advanced",
         "max_results": 10,
-        "include_domains": list(TRUSTED_DOMAINS.keys()),
+        "include_domains": SEARCH_DOMAINS,
     }
 
     try:

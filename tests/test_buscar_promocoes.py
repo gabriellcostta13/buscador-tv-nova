@@ -22,7 +22,7 @@ def make_offer(**overrides):
 
 def test_current_rules():
     assert (MAX_PRICE, MIN_SIZE, MAX_SIZE) == (2300.0, 43.0, 50.0)
-    assert (MIN_VERIFIED_DISCOUNT, EXCEPTIONAL_PRICE, EXCEPTIONAL_GAMING_SCORE) == (12.0, 1800.0, 70)
+    assert (MIN_VERIFIED_DISCOUNT, EXCEPTIONAL_PRICE, EXCEPTIONAL_GAMING_SCORE) == (8.0, 2000.0, 55)
 
 def test_size_boundaries():
     assert validate_offer(make_offer(size_inches=43)) is not None
@@ -40,9 +40,9 @@ def test_discount_is_calculated_locally():
     assert offer.discount_percent == 25.0
 
 def test_exceptional_boundaries():
-    good = validate_offer(make_offer(price_brl=1800, reference_price_brl=None, gaming_score=70))
-    bad_price = validate_offer(make_offer(price_brl=1800.01, reference_price_brl=None, gaming_score=70))
-    bad_score = validate_offer(make_offer(price_brl=1800, reference_price_brl=None, gaming_score=69))
+    good = validate_offer(make_offer(price_brl=2000, reference_price_brl=None, gaming_score=55))
+    bad_price = validate_offer(make_offer(price_brl=2000.01, reference_price_brl=None, gaming_score=55))
+    bad_score = validate_offer(make_offer(price_brl=2000, reference_price_brl=None, gaming_score=54))
     assert good is not None and should_alert(good)
     assert bad_price is not None and not should_alert(bad_price)
     assert bad_score is not None and not should_alert(bad_score)
