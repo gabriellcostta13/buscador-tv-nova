@@ -887,48 +887,48 @@ def format_offer(
 
     if offer.evidence_urls:
         evidence = (
-            "\n?? Evidência: "
+            "\n🔎 Evidência: "
             + _tg(
                 offer.evidence_urls[0]
             )
         )
 
     return (
-        "?? <b>OFERTA DE TV PARA GAMING</b>\n\n"
+        "🔥 <b>OFERTA DE TV PARA GAMING</b>\n\n"
 
-        f"?? <b>{_tg(offer.brand)} "
+        f"📺 <b>{_tg(offer.brand)} "
         f"{_tg(offer.model)}</b>\n"
 
-        f"?? {offer.size_inches:g}\" • "
+        f"📏 {offer.size_inches:g}\" • "
         f"{_tg(offer.resolution)} • "
         f"{_tg(panel)}\n"
 
-        f"? {_tg(refresh)}\n"
+        f"⚡ {_tg(refresh)}\n"
 
-        f"?? {_tg(features)}\n\n"
+        f"🎮 {_tg(features)}\n\n"
 
-        f"?? <b>Agora: "
+        f"💰 <b>Agora: "
         f"{brl(offer.price_brl)}</b>\n"
 
-        f"?? Referência: {ref}\n"
+        f"📊 Referência: {ref}\n"
 
-        f"?? Desconto real: "
+        f"📉 Desconto real: "
         f"{discount}\n"
 
-        f"?? {_tg(offer.store)}\n"
+        f"🏪 {_tg(offer.store)}\n"
 
-        f"?? Gaming: "
+        f"🎯 Gaming: "
         f"{offer.gaming_score}/100\n"
 
-        f"??? {_tg(confidence)}\n\n"
+        f"🛡️ {_tg(confidence)}\n\n"
 
-        f"?? {_tg(offer.confidence_reason)}\n"
+        f"ℹ️ {_tg(offer.confidence_reason)}\n"
 
-        f"?? {_tg(offer.notes)}"
+        f"📝 {_tg(offer.notes)}"
 
         f"{evidence}\n"
 
-        f"\n?? {_tg(offer.url)}"
+        f"\n🔗 {_tg(offer.url)}"
     )
 
 
